@@ -1,8 +1,8 @@
 {
     "title": "Randomize Item Picks",
-    "description": "Exposes a keyboard shortcut (R) to pick random items during equipment drafts.",
+    "description": "Exposes a keyboard shortcut to pick random items during equipment drafts.",
     "author": "polymeric",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "url": "https://www.nexusmods.com/games/mewgenics/mods/318",
     "requirements": []
 }
