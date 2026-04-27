@@ -34,7 +34,7 @@ std::string get_user_facing_error_message(AmeboidErrorCode error_code) {
             builder += "(but seriously, the author of this mod probably did something very silly if you are seeing this message)\n";
             break;
         case AmeboidErrorCode::HashMismatch:
-            builder += std::format("The version of {} installed is not compatible with the version of Mewgenics on your computer.\n", MOD_NAME);
+            builder += std::format("{} is not compatible with the version of Mewgenics on your computer. Mewgenics version {} is expected.\n", MOD_NAME, EXE_VERSION);
             break;
         case AmeboidErrorCode::FailedToHook:
             builder += std::format("A function hook failed to install.\n", MOD_NAME);
@@ -44,10 +44,11 @@ std::string get_user_facing_error_message(AmeboidErrorCode error_code) {
             break;
     }
 
-    builder += std::format("\nPlease check for an update or report an issue at:\n{}\n\n", MOD_URL);
+    builder += std::format("\nPlease check for a mod update or report an issue at:\n{}\n\n", MOD_URL);
 
     builder += std::format("Additional information:\n");
     builder += std::format("Mod: {} version {}\n", MOD_NAME, MOD_VERSION);
+    builder += std::format("Mewgenics.exe expected version: {}\n", EXE_VERSION);
     builder += std::format("Mewgenics.exe expected SHA-256: {}\n", hash256bit_to_string(EXE_SHA256));
     builder += std::format("Mewgenics.exe actual SHA-256: {}", G.exe_actual_sha256.has_value() ? hash256bit_to_string(G.exe_actual_sha256.value()) : "<unknown>");
 

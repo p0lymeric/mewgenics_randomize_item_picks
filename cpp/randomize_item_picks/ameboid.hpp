@@ -16,10 +16,13 @@
 inline constexpr char MOD_AUTHOR[] = "polymeric";
 inline constexpr char MOD_NAME[] = "Randomize Item Picks";
 inline constexpr char MOD_URL[] = "https://www.nexusmods.com/games/mewgenics/mods/318\nhttps://github.com/p0lymeric/mewgenics_randomize_item_picks";
-inline constexpr char MOD_VERSION[] = "0.0.1";
+inline constexpr char MOD_VERSION[] = "1.0.0";
 
 // These addresses were extracted from Mewgenics.exe
 // The script under misc/find_rvas.py can help with recovering these addresses after a game update
+
+// Semantic release version of the Mewgenics.exe binary last used to update hardcoded offsets
+inline constexpr char EXE_VERSION[] = "1.0.20941";
 
 // SHA-256 hash of the Mewgenics.exe binary last used to update hardcoded offsets
 inline constexpr Hash256Bit EXE_SHA256 = c_str_to_hash256bit("c10cb2435874db1e291b949eb226e061512e05f2bc235504a6617f525688b26c");
