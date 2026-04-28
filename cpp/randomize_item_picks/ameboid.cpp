@@ -71,7 +71,7 @@ AmeboidErrorCode on_attach() {
     // Create a Win32 console window with which to print log messages. ENABLE_CONSOLE_LOGGING disables this for public release.
     ALLOC_CONSOLE();
 
-    D::info("Initializing {}", MOD_NAME);
+    D::info("Initializing {} version {}", MOD_NAME, MOD_VERSION);
     // D::info("Hook base VA: 0x{:x}", G.dll_base_va);
     // D::info("Executable base VA: 0x{:x}", host_exec_base_va);
     // D::info("Executable SHA-256: {}", G.exe_actual_sha256.has_value() ? hash256bit_to_string(G.exe_actual_sha256.value()) : "<unknown>");
