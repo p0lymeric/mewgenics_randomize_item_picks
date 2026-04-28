@@ -296,9 +296,10 @@ MAKE_HOOK(0, ADDRESS_SDL_WaitEventTimeoutNS,
     bool, __cdecl, SDL_WaitEventTimeoutNS,
     SDL_Event *event, Sint64 timeoutNS
 ) {
-    if(event->type == SDL_EVENT_KEY_DOWN && event->key.key == SDLK_R) {
+    bool result = SDL_WaitEventTimeoutNS_hook.orig(event, timeoutNS);
+    if(result && event->type == SDL_EVENT_KEY_DOWN && event->key.key == SDLK_R) {
         MAKE_PROFILER_SCOPE(sct, "SDL_WaitEventTimeoutNS/SDL_EVENT_KEY_DOWN/R");
         shuffle_items_and_schedule_invokes();
     }
-    return SDL_WaitEventTimeoutNS_hook.orig(event, timeoutNS);
+    return result;
 }
