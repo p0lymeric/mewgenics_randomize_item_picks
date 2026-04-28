@@ -99,6 +99,7 @@ void shuffle_items_and_schedule_invokes() {
         }
 
         // get the Shared and StorageItems scenes
+        bool select_backpack_if_true_otherwise_storage = false;
         Scene *p_shared_scene = nullptr;
         Scene *p_storageitems_scene = nullptr;
         for(auto p_scene : p_mewdirector->director->scenes) {
@@ -106,6 +107,10 @@ void shuffle_items_and_schedule_invokes() {
                 p_shared_scene = p_scene;
             } else if(p_scene->name.as_native_string_view() == "StorageItems") {
                 p_storageitems_scene = p_scene;
+                select_backpack_if_true_otherwise_storage = false;
+            } else if(p_scene->name.as_native_string_view() == "CatStatus") {
+                p_storageitems_scene = p_scene;
+                select_backpack_if_true_otherwise_storage = true;
             } else if(p_scene->name.as_native_string_view() == "YesNoPrompt") {
                 // return if there is a YesNoPrompt to avoid crashing the game
                 return;
@@ -152,7 +157,7 @@ void shuffle_items_and_schedule_invokes() {
 
         // copy all items from game inventory to native map
         std::unordered_map<int64_t, Equipment *> items;
-        auto head = p_inventory->storage._List._Myhead;
+        auto head = select_backpack_if_true_otherwise_storage ? p_inventory->backpack._List._Myhead : p_inventory->storage._List._Myhead;
         auto current = head->_Next;
         while(current != head) {
             // D::debug("item {} {}", current->_Myval.key, current->_Myval.val.name);

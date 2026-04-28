@@ -16,9 +16,9 @@ struct InventoryKVPair {
     Equipment val;
 };
 struct Inventory : Component {
-    MsvcReleaseModeXHash<InventoryKVPair> inv_0;
-    MsvcReleaseModeXHash<InventoryKVPair> storage; // house inventory?
-    MsvcReleaseModeXHash<InventoryKVPair> inv_2;
+    MsvcReleaseModeXHash<InventoryKVPair> backpack;
+    MsvcReleaseModeXHash<InventoryKVPair> storage;
+    MsvcReleaseModeXHash<InventoryKVPair> trash;
     char _f8[8];
     char _100[8];
     char _108[0x30];
