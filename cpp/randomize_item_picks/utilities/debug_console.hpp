@@ -65,7 +65,7 @@ public:
         #endif
         #ifdef ENABLE_MEWJECTOR_LOGGING
         if(const MewjectorAPI *mj = MJ_SUPPORT_GetAPI(); mj != NULL) {
-            mj->Log("polymeric.randomize_item_picks", "%s\n", multibyte.c_str());
+            mj->Log("polymeric.randomize_item_picks", "%s", multibyte.c_str());
         }
         #endif
     }

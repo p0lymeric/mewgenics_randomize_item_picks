@@ -4,8 +4,10 @@
 #include "utilities/debug_console.hpp"
 #include "utilities/function_hook.hpp"
 #include "utilities/portal.hpp"
+#include "utilities/time_profiling.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <list>
 #include <random>
 #include <unordered_map>
@@ -32,8 +34,11 @@ MAKE_DPORTAL(DATAOFF_glaiel__MewDirector__p_singleton,
 
 void on_update_frame() {
     if(!P.invoke_queue_once_per_update_frame.empty()) {
+        MAKE_PROFILER_SCOPE(sct, "on_update_frame");
+        MAKE_PROFILER_CHECKPOINT(cht, "on_update_frame");
         // get the MewDirector
         MewDirector *p_mewdirector = get_p_mewdirector_singleton();
+        PROFILER_CHECKPOINT_CHECK(cht, "get_p_mewdirector_singleton");
         if(p_mewdirector == nullptr) {
             return;
         }
@@ -48,6 +53,7 @@ void on_update_frame() {
                 break;
             }
         }
+        PROFILER_CHECKPOINT_CHECK(cht, "p_pausemenu_scene");
         if(p_pausemenu_scene == nullptr) {
             return;
         }
@@ -64,6 +70,7 @@ void on_update_frame() {
             }
             type_name.destroy();
         }
+        PROFILER_CHECKPOINT_CHECK(cht, "p_pausemenu");
         // if the pause menu is loaded, don't continue to avoid a crash
         if(p_pausemenu != nullptr) {
             return;
@@ -75,14 +82,18 @@ void on_update_frame() {
         P.invoke_queue_once_per_update_frame.pop_back();
 
         P.block_calls_to_InventoryItemBox__click__lambda_1__Do_call_posttrampoline = !P.invoke_queue_once_per_update_frame.empty();
+        PROFILER_CHECKPOINT_CHECK(cht, "end");
     }
 }
 
 void shuffle_items_and_schedule_invokes() {
+    MAKE_PROFILER_SCOPE(sct, "shuffle_items_and_schedule_invokes");
+    MAKE_PROFILER_CHECKPOINT(cht, "shuffle_items_and_schedule_invokes");
     // Only queue button pushes if the queue is empty
     if(P.invoke_queue_once_per_update_frame.empty()) {
         // get the MewDirector
         MewDirector *p_mewdirector = get_p_mewdirector_singleton();
+        PROFILER_CHECKPOINT_CHECK(cht, "get_p_mewdirector_singleton");
         if(p_mewdirector == nullptr) {
             return;
         }
@@ -95,11 +106,12 @@ void shuffle_items_and_schedule_invokes() {
                 p_shared_scene = p_scene;
             } else if(p_scene->name.as_native_string_view() == "StorageItems") {
                 p_storageitems_scene = p_scene;
-            }
-            if(p_shared_scene != nullptr && p_storageitems_scene != nullptr) {
-                break;
+            } else if(p_scene->name.as_native_string_view() == "YesNoPrompt") {
+                // return if there is a YesNoPrompt to avoid crashing the game
+                return;
             }
         }
+        PROFILER_CHECKPOINT_CHECK(cht, "p_shared_scene/p_storageitems_scene");
         if(p_shared_scene == nullptr || p_storageitems_scene == nullptr) {
             return;
         }
@@ -116,6 +128,7 @@ void shuffle_items_and_schedule_invokes() {
             }
             type_name.destroy();
         }
+        PROFILER_CHECKPOINT_CHECK(cht, "p_inventory");
         if(p_inventory == nullptr) {
             return;
         }
@@ -132,6 +145,7 @@ void shuffle_items_and_schedule_invokes() {
             }
             type_name.destroy();
         }
+        PROFILER_CHECKPOINT_CHECK(cht, "p_catselector");
         if(p_catselector == nullptr) {
             return;
         }
@@ -145,6 +159,7 @@ void shuffle_items_and_schedule_invokes() {
             items.try_emplace(current->_Myval.key, &current->_Myval.val);
             current = current->_Next;
         }
+        PROFILER_CHECKPOINT_CHECK(cht, "items");
 
         // get all cats
         std::vector<CatData *> cats;
@@ -167,6 +182,7 @@ void shuffle_items_and_schedule_invokes() {
         if(selected_cat == nullptr) {
             D::error("Cannot find selected cat from CatSelector in its scene's CatParts!");
         }
+        PROFILER_CHECKPOINT_CHECK(cht, "cats");
 
         // assort all InventoryItemBoxes
         std::unordered_map<int64_t, InventoryItemBox *> heads;
@@ -205,6 +221,7 @@ void shuffle_items_and_schedule_invokes() {
                 (*map_sel)[box->id] = box;
             }
         }
+        PROFILER_CHECKPOINT_CHECK(cht, "assort");
 
         // remove items held by cats from temporary map
         for(auto cat : cats) {
@@ -214,6 +231,7 @@ void shuffle_items_and_schedule_invokes() {
             weapons.erase(cat->weapon.id);
             trinkets.erase(cat->trinket.id);
         }
+        PROFILER_CHECKPOINT_CHECK(cht, "erase");
 
         auto schedule_randomize = [](std::unordered_map<int64_t, InventoryItemBox *> &map, Equipment &cat_eq) -> void {
             // D::debug("will randomize {}", cat_eq.name);
@@ -236,6 +254,7 @@ void shuffle_items_and_schedule_invokes() {
         schedule_randomize(weapons, selected_cat->weapon);
         schedule_randomize(trinkets, selected_cat->trinket);
         P.block_calls_to_InventoryItemBox__click__lambda_1__Do_call_posttrampoline = true;
+        PROFILER_CHECKPOINT_CHECK(cht, "end");
     }
 }
 
@@ -250,7 +269,7 @@ MAKE_HOOK(0, ADDRESS_glaiel__InventoryItemBox__click__lambda_1__Do_call_posttram
     }
 }
 
-// Hook MewDirector's always_update routine to perform per update frame actions
+// Hook MewDirector's always_update routine to perform tasks in sync with update frames
 MAKE_HOOK(0, ADDRESS_glaiel__MewDirector__always_update,
     void, __cdecl, glaiel__MewDirector__always_update,
     MewDirector* thiss
@@ -259,12 +278,12 @@ MAKE_HOOK(0, ADDRESS_glaiel__MewDirector__always_update,
     glaiel__MewDirector__always_update_hook.orig(thiss);
 }
 
-// Hook SDL_PollEvent to capture user input
+// Hook SDL_PollEvent to capture user input in sync with the game's event processing
 MAKE_HOOK(0, ADDRESS_SDL_PollEvent,
     bool, __cdecl, SDL_PollEvent,
     SDL_Event *event
 ) {
-    if(event->type == SDL_EVENT_KEY_DOWN && event->key.key == SDLK_R) {
+    if(event->type == SDL_EVENT_KEY_DOWN && event->key.key == SDLK_R && !event->key.repeat) {
         shuffle_items_and_schedule_invokes();
     }
     return SDL_PollEvent_hook.orig(event);
