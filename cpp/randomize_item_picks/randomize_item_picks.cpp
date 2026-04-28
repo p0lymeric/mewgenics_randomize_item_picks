@@ -233,27 +233,33 @@ void shuffle_items_and_schedule_invokes() {
         }
         PROFILER_CHECKPOINT_CHECK(cht, "erase");
 
-        auto schedule_randomize = [](std::unordered_map<int64_t, InventoryItemBox *> &map, Equipment &cat_eq) -> void {
+        auto schedule_randomize = [](std::unordered_map<int64_t, InventoryItemBox *> &map, Equipment &cat_eq) -> bool {
             // D::debug("will randomize {}", cat_eq.name);
             if(cat_eq.id == -1 || cat_eq.unknown_3 == 0) {
                 if(map.empty()) {
-                    return;
+                    return false;
                 }
                 auto it = map.begin();
                 std::uniform_int_distribution<size_t> dist(0, map.size() - 1);
                 std::advance(it, dist(P.prng));
                 P.invoke_queue_once_per_update_frame.push_back(&it->second->p_button->stdfunction);
+                return true;
             }
+            return false;
         };
 
         // schedule the randomization
         // at most one button can be invoked per frame, otherwise the game will crash
-        schedule_randomize(heads, selected_cat->head);
-        schedule_randomize(faces, selected_cat->face);
-        schedule_randomize(necks, selected_cat->neck);
-        schedule_randomize(weapons, selected_cat->weapon);
-        schedule_randomize(trinkets, selected_cat->trinket);
-        P.block_calls_to_InventoryItemBox__click__lambda_1__Do_call_posttrampoline = true;
+        bool enqueued_action = false;
+        enqueued_action |= schedule_randomize(heads, selected_cat->head);
+        enqueued_action |= schedule_randomize(faces, selected_cat->face);
+        enqueued_action |= schedule_randomize(necks, selected_cat->neck);
+        enqueued_action |= schedule_randomize(weapons, selected_cat->weapon);
+        enqueued_action |= schedule_randomize(trinkets, selected_cat->trinket);
+        if(enqueued_action) {
+            // will be unset after P.invoke_queue_once_per_update_frame is drained
+            P.block_calls_to_InventoryItemBox__click__lambda_1__Do_call_posttrampoline = true;
+        }
         PROFILER_CHECKPOINT_CHECK(cht, "end");
     }
 }
@@ -278,13 +284,16 @@ MAKE_HOOK(0, ADDRESS_glaiel__MewDirector__always_update,
     glaiel__MewDirector__always_update_hook.orig(thiss);
 }
 
-// Hook SDL_PollEvent to capture user input in sync with the game's event processing
-MAKE_HOOK(0, ADDRESS_SDL_PollEvent,
-    bool, __cdecl, SDL_PollEvent,
-    SDL_Event *event
+// Hook SDL_WaitEventTimeoutNS to capture user input in sync with the game's event processing
+// FIXME we really want to hook SDL_PollEvent through GetProcAddress but could not get Mewjector to hook JMP trampolines properly
+// SDL_WaitEventTimeoutNS is easier to obtain by direct sig matching
+MAKE_HOOK(0, ADDRESS_SDL_WaitEventTimeoutNS,
+    bool, __cdecl, SDL_WaitEventTimeoutNS,
+    SDL_Event *event, Sint64 timeoutNS
 ) {
-    if(event->type == SDL_EVENT_KEY_DOWN && event->key.key == SDLK_R && !event->key.repeat) {
+    if(event->type == SDL_EVENT_KEY_DOWN && event->key.key == SDLK_R) {
+        MAKE_PROFILER_SCOPE(sct, "SDL_WaitEventTimeoutNS/SDL_EVENT_KEY_DOWN/R");
         shuffle_items_and_schedule_invokes();
     }
-    return SDL_PollEvent_hook.orig(event);
+    return SDL_WaitEventTimeoutNS_hook.orig(event, timeoutNS);
 }

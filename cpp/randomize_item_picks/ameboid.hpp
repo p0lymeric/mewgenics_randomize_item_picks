@@ -30,7 +30,7 @@ inline constexpr Hash256Bit EXE_SHA256 = c_str_to_hash256bit("c10cb2435874db1e29
 // Function offsets are encoded as relative VAs
 inline constexpr uintptr_t ADDRESS_glaiel__MewDirector__always_update = 0x3add50; // DirectSig(pattern='48 8B 05 ?? ?? ?? ?? F2 0F 10 05 ?? ?? ?? ?? 48 FF 81 30 05 00 00 F2 0F 5E 80 C8 0D 00 00 F2 0F 58 81 38 05 00 00', offset=0)
 inline constexpr uintptr_t ADDRESS_glaiel__InventoryItemBox__click__lambda_1__Do_call_posttrampoline = 0x34bfb0; // DirectSig(pattern='40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 E1 48 81 EC E8 00 00 00 4C 8B E9 C7 45 67 00 00 00 00', offset=0)
-inline constexpr uintptr_t ADDRESS_SDL_PollEvent = 0xbaad60; // DirectSig(pattern='48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 48 89 7C 24 20 41 56 48 81 EC B0 00 00 00 48 85 D2', offset=0)
+inline constexpr uintptr_t ADDRESS_SDL_WaitEventTimeoutNS = 0xbaad60; // DirectSig(pattern='48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 48 89 7C 24 20 41 56 48 81 EC B0 00 00 00 48 85 D2', offset=0)
 
 // Data offsets are encoded as relative VAs
 inline constexpr uintptr_t DATAOFF_glaiel__MewDirector__p_singleton = 0x13c7bd0; // IndirectSig(pattern='48 89 5C 24 10 48 89 4C 24 08 57 48 83 EC 40 48 8B CA 48 8B 05 ?? ?? ?? ?? 48 8B B8 A8 05 00 00', offset=21, length=4, signed=True, rip_relative=True)

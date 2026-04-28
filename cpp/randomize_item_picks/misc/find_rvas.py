@@ -22,7 +22,7 @@ signatures = {
     # Functions are located by anchoring on starting bytes if possible, but offsets and indirect references may be used if needed
     'ADDRESS_glaiel__MewDirector__always_update': DirectSig('48 8B 05 ?? ?? ?? ?? F2 0F 10 05 ?? ?? ?? ?? 48 FF 81 30 05 00 00 F2 0F 5E 80 C8 0D 00 00 F2 0F 58 81 38 05 00 00', 0),
     'ADDRESS_glaiel__InventoryItemBox__click__lambda_1__Do_call_posttrampoline': DirectSig('40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 E1 48 81 EC E8 00 00 00 4C 8B E9 C7 45 67 00 00 00 00', 0),
-    'ADDRESS_SDL_PollEvent': DirectSig('48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 48 89 7C 24 20 41 56 48 81 EC B0 00 00 00 48 85 D2', 0),
+    'ADDRESS_SDL_WaitEventTimeoutNS': DirectSig('48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 48 89 7C 24 20 41 56 48 81 EC B0 00 00 00 48 85 D2', 0),
 
     # Data/TLS references are located through references within functions
     'DATAOFF_glaiel__MewDirector__p_singleton': IndirectSig(
