@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.15)
 
-project(ameboid)
+project(amoeboid)
 
 # Read third-party library CMakeLists
 add_subdirectory(lib/Detours EXCLUDE_FROM_ALL)

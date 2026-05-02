@@ -44,6 +44,11 @@
     static ProcFunctionHookDescriptor<ret_type (call_conv *)(__VA_ARGS__), true, group> name##_hook(lp_proc_name, &name##_detour); \
     static ret_type call_conv name##_detour(__VA_ARGS__)
 
+#define MAKE_SHOOK(group, sig, ret_type, call_conv, name, ...) \
+    static ret_type call_conv name##_detour(__VA_ARGS__); \
+    static SigFunctionHookDescriptor<ret_type (call_conv *)(__VA_ARGS__), true, group, decltype(sig)> name##_hook(sig, &name##_detour); \
+    static ret_type call_conv name##_detour(__VA_ARGS__)
+
 enum class EFunctionHookProvider {
     Uninstalled,
     MinHook,
@@ -53,7 +58,8 @@ enum class EFunctionHookProvider {
 
 class IFunctionHookDescriptor {
 public:
-    virtual bool install(uintptr_t offset, EFunctionHookProvider api_provider) = 0;
+    virtual bool resolve(uintptr_t offset, size_t size) = 0;
+    virtual bool install(EFunctionHookProvider api_provider) = 0;
     virtual bool uninstall(EFunctionHookProvider api_provider) = 0;
 };
 
@@ -109,7 +115,18 @@ public:
         }
     }
 
-    static bool install_hooks(uintptr_t host_exec_base_va, EFunctionHookProvider api_provider, int group) {
+    static bool resolve_hooks(uintptr_t host_exec_base_va, size_t host_exec_image_size, int group) {
+        FunctionHookRegistryIndex &registry = SFunctionHookRegistry::get_registry(group);
+        bool success = true;
+        for(auto hook : registry.hook_descriptors) {
+            if (!hook->resolve(host_exec_base_va, host_exec_image_size)) {
+                success = false;
+            }
+        }
+        return success;
+    }
+
+    static bool install_hooks(EFunctionHookProvider api_provider, int group) {
         // SFunctionHookRegistry will generally:
         // - check if the API is present if necessary
         // - call any global init functions if required (SFunctionHookRegistry assumes it owns global init/deinit routines)
@@ -149,7 +166,7 @@ public:
                     return false;
                 }
                 for(auto hook : registry.hook_descriptors) {
-                    if (!hook->install(host_exec_base_va, api_provider)) {
+                    if (!hook->install(api_provider)) {
                         return false;
                     }
                 }
@@ -164,7 +181,7 @@ public:
                     return false;
                 }
                 for(auto hook : registry.hook_descriptors) {
-                    if (!hook->install(host_exec_base_va, api_provider)) {
+                    if (!hook->install(api_provider)) {
                         return false;
                     }
                 }
@@ -282,15 +299,22 @@ public:
         }
     }
 
-    virtual FP calculate_target(uintptr_t offset) = 0;
+    virtual FP calculate_target(uintptr_t offset, size_t size) = 0;
 
-    bool install(uintptr_t offset, EFunctionHookProvider api_provider) override {
-        this->target = this->calculate_target(offset);
+    bool resolve(uintptr_t offset, size_t size) override {
+        this->target = this->calculate_target(offset, size);
         if(this->target == nullptr) {
             // e.g. if GetProcAddress were to fail
             return false;
         }
+        return true;
+    }
 
+    bool install(EFunctionHookProvider api_provider) override {
+        if(this->target == nullptr) {
+            // e.g. if GetProcAddress were to fail
+            return false;
+        }
         switch(api_provider) {
             #ifdef SUPPORT_MINHOOK_HOOK_IMPL
             case EFunctionHookProvider::MinHook:
@@ -314,10 +338,18 @@ public:
             #ifdef SUPPORT_MEWJECTOR_HOOK_IMPL
             case EFunctionHookProvider::Mewjector:
                 if(const MewjectorAPI *mj = MJ_SUPPORT_GetAPI(); mj != NULL) {
-                    // NB: MJ doesn't adjust any RIP-relative instructions, if any were to exist in the stolen region
+                    // Versions of Mewjector prior to v3.1 required an externally calculated value for stolenBytes
+                    const size_t MIN_BYTES_TO_STEAL = 14;
+                    uintptr_t target_start = reinterpret_cast<uintptr_t>(this->target);
+                    uintptr_t target_end_of_stolen_region = target_start;
+                    while(target_end_of_stolen_region - target_start < MIN_BYTES_TO_STEAL) {
+                        PVOID target_end_of_stolen_region_void = DetourCopyInstruction(NULL, NULL, reinterpret_cast<PVOID>(target_end_of_stolen_region), NULL, NULL);
+                        target_end_of_stolen_region = reinterpret_cast<uintptr_t>(target_end_of_stolen_region_void);
+                    }
+                    int bytes_to_steal = static_cast<int>(target_end_of_stolen_region - target_start);
                     if(mj->InstallHook(
-                        reinterpret_cast<UINT_PTR>(this->target) - offset,
-                        0,
+                        reinterpret_cast<UINT_PTR>(this->target) - reinterpret_cast<UINT_PTR>(GetModuleHandle(NULL)),
+                        bytes_to_steal,
                         reinterpret_cast<void *>(this->detour),
                         reinterpret_cast<void **>(&this->orig),
                         10,
@@ -387,8 +419,9 @@ public:
         this->target = target;
     }
 
-    FP calculate_target(uintptr_t offset) override {
+    FP calculate_target(uintptr_t offset, size_t size) override {
         (void)offset;
+        (void)size;
         return this->target;
     }
 };
@@ -403,7 +436,8 @@ public:
         BFunctionHookDescriptor<FP, RegisterMe, Group>(detour), target_canonical(target_canonical)
     {}
 
-    FP calculate_target(uintptr_t offset) override {
+    FP calculate_target(uintptr_t offset, size_t size) override {
+        (void)size;
         return reinterpret_cast<FP>(this->target_canonical + offset);
     }
 };
@@ -418,10 +452,26 @@ public:
         BFunctionHookDescriptor<FP, RegisterMe, Group>(detour), lp_proc_name(lp_proc_name)
     {}
 
-    FP calculate_target(uintptr_t offset) override {
+    FP calculate_target(uintptr_t offset, size_t size) override {
+        (void)size;
         // offset is an HMODULE retrieved with GetModuleHandle(NULL) outside this function
         // can potentially perform cross-dll hooking by storing a wide string module name too
         return std::bit_cast<FP>(GetProcAddress(reinterpret_cast<HMODULE>(offset), this->lp_proc_name));
+    }
+};
+
+template<typename FP, bool RegisterMe, int Group, typename SigClass>
+class SigFunctionHookDescriptor : public BFunctionHookDescriptor<FP, RegisterMe, Group> {
+public:
+    // Signature descriptor of the targeted function.
+    const SigClass sig;
+
+    SigFunctionHookDescriptor(SigClass sig, FP detour) :
+        BFunctionHookDescriptor<FP, RegisterMe, Group>(detour), sig(sig)
+    {}
+
+    FP calculate_target(uintptr_t offset, size_t size) override {
+        return reinterpret_cast<FP>(sig.find_unique_match_or_none(reinterpret_cast<uint8_t *>(offset), size));
     }
 };
 

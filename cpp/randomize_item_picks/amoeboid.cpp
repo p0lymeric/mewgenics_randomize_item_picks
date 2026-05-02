@@ -1,9 +1,11 @@
-#include "ameboid.hpp"
+#include "amoeboid.hpp"
 #include "utilities/checksum.hpp"
 #include "utilities/debug_console.hpp"
 #include "utilities/function_hook.hpp"
+#include "utilities/memory.hpp"
 #include "utilities/strings.hpp"
 #include "utilities/portal.hpp"
+#include "utilities/stopwatch.hpp"
 
 #include <filesystem>
 
@@ -11,7 +13,7 @@
 
 #include "detours.h"
 
-// Ameboid
+// Amoeboid
 //
 // A base DLL implementation for Mewgenics modding.
 //
@@ -19,28 +21,31 @@
 
 GlobalContext G;
 
-enum class AmeboidErrorCode {
+enum class AmoeboidErrorCode {
     Success,
     HashMismatch,
+    FailedToResolveSymbol,
     FailedToHook,
     FailedToUnhook,
 };
 
-std::string get_user_facing_error_message(AmeboidErrorCode error_code) {
+std::string get_user_facing_error_message(AmoeboidErrorCode error_code) {
     std::string builder;
     switch(error_code) {
-        case AmeboidErrorCode::Success:
+        case AmoeboidErrorCode::Success:
             builder += "A supposedly impossible error occurred where something failed successfully.\n";
             builder += "(but seriously, the author of this mod probably did something very silly if you are seeing this message)\n";
             break;
-        case AmeboidErrorCode::HashMismatch:
+        case AmoeboidErrorCode::HashMismatch:
             builder += std::format("{} is not compatible with the version of Mewgenics on your computer. Mewgenics version {} is expected.\n", MOD_NAME, EXE_VERSION);
+        case AmoeboidErrorCode::FailedToResolveSymbol:
+            builder += std::format("A function/data symbol failed to resolve.\n");
             break;
-        case AmeboidErrorCode::FailedToHook:
-            builder += std::format("A function hook failed to install.\n", MOD_NAME);
+        case AmoeboidErrorCode::FailedToHook:
+            builder += std::format("A function hook failed to install.\n");
             break;
-        case AmeboidErrorCode::FailedToUnhook:
-            builder += std::format("A function hook failed to uninstall.\n", MOD_NAME);
+        case AmoeboidErrorCode::FailedToUnhook:
+            builder += std::format("A function hook failed to uninstall.\n");
             break;
     }
 
@@ -55,73 +60,94 @@ std::string get_user_facing_error_message(AmeboidErrorCode error_code) {
     return builder;
 }
 
-AmeboidErrorCode on_attach() {
+AmoeboidErrorCode on_attach() {
     // Actual virtual address where mapped executable begins
-    uintptr_t host_exec_base_va = reinterpret_cast<uintptr_t>(GetModuleHandle(NULL));
+    HMODULE host_exec_module = GetModuleHandle(NULL);
+    uintptr_t host_exec_base_va = reinterpret_cast<uintptr_t>(host_exec_module);
+    size_t host_exec_image_size = get_pe_image_mapped_size(host_exec_module);
     G.host_exec_base_va = host_exec_base_va;
-
-    // Calculate the SHA-256 digest of the executable
-    // If the act of calculating the hash fails, continue optimistically
-    std::filesystem::path exe_path = get_module_file_path(NULL);
-    G.exe_actual_sha256 = sha256_file(exe_path);
-    if(G.exe_actual_sha256.has_value()) {
-        G.exe_hash_mismatch_detected = (G.exe_actual_sha256.value() != EXE_SHA256);
-    }
+    G.host_exec_image_size = host_exec_image_size;
 
     // Create a Win32 console window with which to print log messages. ENABLE_CONSOLE_LOGGING disables this for public release.
     ALLOC_CONSOLE();
 
+    // Calculate the SHA-256 digest of the executable
+    // If the act of calculating the hash fails, continue optimistically
+    {
+        MAKE_STOPWATCH_SCOPE(sct, "sha256 calculation");
+        std::filesystem::path exe_path = get_module_file_path(NULL);
+        G.exe_actual_sha256 = sha256_file(exe_path);
+        if(G.exe_actual_sha256.has_value()) {
+            G.exe_hash_mismatch_detected = (G.exe_actual_sha256.value() != EXE_SHA256);
+        }
+    }
+
     D::info("Initializing {} version {}", MOD_NAME, MOD_VERSION);
     // D::info("Hook base VA: 0x{:x}", G.dll_base_va);
+    // D::info("Hook mapped size: 0x{:x}\n", G.dll_image_size);
     // D::info("Executable base VA: 0x{:x}", host_exec_base_va);
+    // D::info("Executable mapped size: {}\n", host_exec_image_size);
     // D::info("Executable SHA-256: {}", G.exe_actual_sha256.has_value() ? hash256bit_to_string(G.exe_actual_sha256.value()) : "<unknown>");
 
     // Do not install any hooks if a hash mismatch was detected.
     // Instead exit this function. The DLL will be loaded, but it will effectively be inactive.
     if(G.exe_hash_mismatch_detected) {
-        return AmeboidErrorCode::HashMismatch;
+        return AmoeboidErrorCode::HashMismatch;
     }
 
-    // Resolve portals (trampolines to functions and data)
-    SPortalRegistry::resolve_portals(host_exec_base_va);
+    // Resolve symbols (calculate VAs, do proc lookups, do signature scans)
+    {
+        MAKE_STOPWATCH_SCOPE(sct, "symbol resolution");
+        // Resolve portals (trampolines to functions and data)
+        if(!SPortalRegistry::resolve_portals(host_exec_base_va, host_exec_image_size)) {
+            return AmoeboidErrorCode::FailedToResolveSymbol;
+        }
+        // Resolve function hook targets
+        if(!SFunctionHookRegistry::resolve_hooks(host_exec_base_va, host_exec_image_size, 0)) {
+            return AmoeboidErrorCode::FailedToResolveSymbol;
+        }
+    }
 
     // Try to install function hooks
-    if(SFunctionHookRegistry::api_is_present(EFunctionHookProvider::Mewjector)) {
-        // Use Mewjector if present for coordinated hooking
-        G.dll_can_self_eject = false;
-        if(!SFunctionHookRegistry::install_hooks(host_exec_base_va, EFunctionHookProvider::Mewjector, 0)) {
-            return AmeboidErrorCode::FailedToHook;
-        }
-    } else {
+    {
+        MAKE_STOPWATCH_SCOPE(sct, "function hook installation");
         G.dll_can_self_eject = true;
-        if(!SFunctionHookRegistry::install_hooks(host_exec_base_va, EFunctionHookProvider::Detours, 0)) {
-            return AmeboidErrorCode::FailedToHook;
+        if(SFunctionHookRegistry::api_is_present(EFunctionHookProvider::Mewjector)) {
+            // Use Mewjector if present for coordinated hooking
+            if(!SFunctionHookRegistry::install_hooks(EFunctionHookProvider::Mewjector, 0)) {
+                return AmoeboidErrorCode::FailedToHook;
+            }
+            G.dll_can_self_eject = false;
+        } else {
+            if(!SFunctionHookRegistry::install_hooks(EFunctionHookProvider::Detours, 0)) {
+                return AmoeboidErrorCode::FailedToHook;
+            }
         }
     }
 
-    return AmeboidErrorCode::Success;
+    return AmoeboidErrorCode::Success;
 }
 
-AmeboidErrorCode on_unload_detach() {
+AmoeboidErrorCode on_unload_detach() {
     D::info("Uninitializing {} (Unload)", MOD_NAME);
     // Try to gracefully remove our hooks if this dll was ejected by an external tool (e.g. via System Informer).
     if(!SFunctionHookRegistry::uninstall_hooks_all(true)) {
-        return AmeboidErrorCode::FailedToUnhook;
+        return AmoeboidErrorCode::FailedToUnhook;
     }
-    return AmeboidErrorCode::Success;
+    return AmoeboidErrorCode::Success;
 }
 
-AmeboidErrorCode on_exitprocess_detach() {
+AmoeboidErrorCode on_exitprocess_detach() {
     D::info("Uninitializing {} (ExitProcess)", MOD_NAME);
     // May as well clean up resources properly, even if the process is going down.
     // Remove hooks, but don't fail if the API is unable to uninstall hooks.
     if(!SFunctionHookRegistry::uninstall_hooks_all(false)) {
-        return AmeboidErrorCode::FailedToUnhook;
+        return AmoeboidErrorCode::FailedToUnhook;
     }
-    return AmeboidErrorCode::Success;
+    return AmoeboidErrorCode::Success;
 }
 
-void on_error(bool is_detach, AmeboidErrorCode error_code) {
+void on_error(bool is_detach, AmoeboidErrorCode error_code) {
     std::string user_facing_error_message = get_user_facing_error_message(error_code);
     if(is_detach) {
         D::error("An unrecoverable error occurred during uninitialization.");
@@ -151,7 +177,7 @@ BOOL WINAPI DllMain(
         return TRUE;
     }
 
-    AmeboidErrorCode error_code = AmeboidErrorCode::Success;
+    AmoeboidErrorCode error_code = AmoeboidErrorCode::Success;
 
     // Perform actions based on the reason for calling.
     switch(fdwReason) {
@@ -161,6 +187,7 @@ BOOL WINAPI DllMain(
             DetourRestoreAfterWith();
 
             G.dll_base_va = reinterpret_cast<uintptr_t>(hinstDLL);
+            G.dll_image_size = get_pe_image_mapped_size(hinstDLL);
 
             error_code = on_attach();
 
@@ -186,7 +213,7 @@ BOOL WINAPI DllMain(
             break;
     }
 
-    if(error_code != AmeboidErrorCode::Success) {
+    if(error_code != AmoeboidErrorCode::Success) {
         on_error(fdwReason == DLL_PROCESS_DETACH, error_code);
     }
 

@@ -1,10 +1,10 @@
-#include "ameboid.hpp"
+#include "amoeboid.hpp"
 #include "types/glaiel.hpp"
 #include "types/msvc.hpp"
 #include "utilities/debug_console.hpp"
 #include "utilities/function_hook.hpp"
 #include "utilities/portal.hpp"
-#include "utilities/time_profiling.hpp"
+#include "utilities/stopwatch.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -28,17 +28,17 @@ struct PrivateState {
 
 static PrivateState P;
 
-MAKE_DPORTAL(DATAOFF_glaiel__MewDirector__p_singleton,
+MAKE_SDPORTAL(DATAOFF_glaiel__MewDirector__p_singleton,
     MewDirector *, get_p_mewdirector_singleton
 )
 
 void on_update_frame() {
     if(!P.invoke_queue_once_per_update_frame.empty()) {
-        MAKE_PROFILER_SCOPE(sct, "on_update_frame");
-        MAKE_PROFILER_CHECKPOINT(cht, "on_update_frame");
+        MAKE_STOPWATCH_SCOPE(sct, "on_update_frame");
+        MAKE_STOPWATCH_CHECKPOINT(cht, "on_update_frame");
         // get the MewDirector
         MewDirector *p_mewdirector = get_p_mewdirector_singleton();
-        PROFILER_CHECKPOINT_CHECK(cht, "get_p_mewdirector_singleton");
+        STOPWATCH_CHECKPOINT_LAP(cht, "get_p_mewdirector_singleton");
         if(p_mewdirector == nullptr) {
             return;
         }
@@ -53,7 +53,7 @@ void on_update_frame() {
                 break;
             }
         }
-        PROFILER_CHECKPOINT_CHECK(cht, "p_pausemenu_scene");
+        STOPWATCH_CHECKPOINT_LAP(cht, "p_pausemenu_scene");
         if(p_pausemenu_scene == nullptr) {
             return;
         }
@@ -70,7 +70,7 @@ void on_update_frame() {
             }
             type_name.destroy();
         }
-        PROFILER_CHECKPOINT_CHECK(cht, "p_pausemenu");
+        STOPWATCH_CHECKPOINT_LAP(cht, "p_pausemenu");
         // if the pause menu is loaded, don't continue to avoid a crash
         if(p_pausemenu != nullptr) {
             return;
@@ -82,18 +82,18 @@ void on_update_frame() {
         P.invoke_queue_once_per_update_frame.pop_back();
 
         P.block_calls_to_InventoryItemBox__click__lambda_1__Do_call_posttrampoline = !P.invoke_queue_once_per_update_frame.empty();
-        PROFILER_CHECKPOINT_CHECK(cht, "end");
+        STOPWATCH_CHECKPOINT_LAP(cht, "end");
     }
 }
 
 void shuffle_items_and_schedule_invokes() {
-    MAKE_PROFILER_SCOPE(sct, "shuffle_items_and_schedule_invokes");
-    MAKE_PROFILER_CHECKPOINT(cht, "shuffle_items_and_schedule_invokes");
+    MAKE_STOPWATCH_SCOPE(sct, "shuffle_items_and_schedule_invokes");
+    MAKE_STOPWATCH_CHECKPOINT(cht, "shuffle_items_and_schedule_invokes");
     // Only queue button pushes if the queue is empty
     if(P.invoke_queue_once_per_update_frame.empty()) {
         // get the MewDirector
         MewDirector *p_mewdirector = get_p_mewdirector_singleton();
-        PROFILER_CHECKPOINT_CHECK(cht, "get_p_mewdirector_singleton");
+        STOPWATCH_CHECKPOINT_LAP(cht, "get_p_mewdirector_singleton");
         if(p_mewdirector == nullptr) {
             return;
         }
@@ -116,7 +116,7 @@ void shuffle_items_and_schedule_invokes() {
                 return;
             }
         }
-        PROFILER_CHECKPOINT_CHECK(cht, "p_shared_scene/p_storageitems_scene");
+        STOPWATCH_CHECKPOINT_LAP(cht, "p_shared_scene/p_storageitems_scene");
         if(p_shared_scene == nullptr || p_storageitems_scene == nullptr) {
             return;
         }
@@ -133,7 +133,7 @@ void shuffle_items_and_schedule_invokes() {
             }
             type_name.destroy();
         }
-        PROFILER_CHECKPOINT_CHECK(cht, "p_inventory");
+        STOPWATCH_CHECKPOINT_LAP(cht, "p_inventory");
         if(p_inventory == nullptr) {
             return;
         }
@@ -150,7 +150,7 @@ void shuffle_items_and_schedule_invokes() {
             }
             type_name.destroy();
         }
-        PROFILER_CHECKPOINT_CHECK(cht, "p_catselector");
+        STOPWATCH_CHECKPOINT_LAP(cht, "p_catselector");
         if(p_catselector == nullptr) {
             return;
         }
@@ -164,7 +164,7 @@ void shuffle_items_and_schedule_invokes() {
             items.try_emplace(current->_Myval.key, &current->_Myval.val);
             current = current->_Next;
         }
-        PROFILER_CHECKPOINT_CHECK(cht, "items");
+        STOPWATCH_CHECKPOINT_LAP(cht, "items");
 
         // get all cats
         std::vector<CatData *> cats;
@@ -187,7 +187,7 @@ void shuffle_items_and_schedule_invokes() {
         if(selected_cat == nullptr) {
             D::error("Cannot find selected cat from CatSelector in its scene's CatParts!");
         }
-        PROFILER_CHECKPOINT_CHECK(cht, "cats");
+        STOPWATCH_CHECKPOINT_LAP(cht, "cats");
 
         // assort all InventoryItemBoxes
         std::unordered_map<int64_t, InventoryItemBox *> heads;
@@ -226,7 +226,7 @@ void shuffle_items_and_schedule_invokes() {
                 (*map_sel)[box->id] = box;
             }
         }
-        PROFILER_CHECKPOINT_CHECK(cht, "assort");
+        STOPWATCH_CHECKPOINT_LAP(cht, "assort");
 
         // remove items held by cats from temporary map
         for(auto cat : cats) {
@@ -236,7 +236,7 @@ void shuffle_items_and_schedule_invokes() {
             weapons.erase(cat->weapon.id);
             trinkets.erase(cat->trinket.id);
         }
-        PROFILER_CHECKPOINT_CHECK(cht, "erase");
+        STOPWATCH_CHECKPOINT_LAP(cht, "erase");
 
         auto schedule_randomize = [](std::unordered_map<int64_t, InventoryItemBox *> &map, Equipment &cat_eq) -> bool {
             // D::debug("will randomize {}", cat_eq.name);
@@ -265,13 +265,13 @@ void shuffle_items_and_schedule_invokes() {
             // will be unset after P.invoke_queue_once_per_update_frame is drained
             P.block_calls_to_InventoryItemBox__click__lambda_1__Do_call_posttrampoline = true;
         }
-        PROFILER_CHECKPOINT_CHECK(cht, "end");
+        STOPWATCH_CHECKPOINT_LAP(cht, "end");
     }
 }
 
 // Hook the lambda implementation that we invoke so that a user cannot trigger a crash
 // by concurrently triggering randomization and clicking a box
-MAKE_HOOK(0, ADDRESS_glaiel__InventoryItemBox__click__lambda_1__Do_call_posttrampoline,
+MAKE_SHOOK(0, ADDRESS_glaiel__InventoryItemBox__click__lambda_1__Do_call_posttrampoline,
     void, __cdecl, InventoryItemBox__click__lambda_1__Do_call_posttrampoline,
     void *capture
 ) {
@@ -281,7 +281,7 @@ MAKE_HOOK(0, ADDRESS_glaiel__InventoryItemBox__click__lambda_1__Do_call_posttram
 }
 
 // Hook MewDirector's always_update routine to perform tasks in sync with update frames
-MAKE_HOOK(0, ADDRESS_glaiel__MewDirector__always_update,
+MAKE_SHOOK(0, ADDRESS_glaiel__MewDirector__always_update,
     void, __cdecl, glaiel__MewDirector__always_update,
     MewDirector* thiss
 ) {
@@ -292,13 +292,13 @@ MAKE_HOOK(0, ADDRESS_glaiel__MewDirector__always_update,
 // Hook SDL_WaitEventTimeoutNS to capture user input in sync with the game's event processing
 // FIXME we really want to hook SDL_PollEvent through GetProcAddress but could not get Mewjector to hook JMP trampolines properly
 // SDL_WaitEventTimeoutNS is easier to obtain by direct sig matching
-MAKE_HOOK(0, ADDRESS_SDL_WaitEventTimeoutNS,
+MAKE_SHOOK(0, ADDRESS_SDL_WaitEventTimeoutNS,
     bool, __cdecl, SDL_WaitEventTimeoutNS,
     SDL_Event *event, Sint64 timeoutNS
 ) {
     bool result = SDL_WaitEventTimeoutNS_hook.orig(event, timeoutNS);
     if(result && event->type == SDL_EVENT_KEY_DOWN && event->key.key == SDLK_R) {
-        MAKE_PROFILER_SCOPE(sct, "SDL_WaitEventTimeoutNS/SDL_EVENT_KEY_DOWN/R");
+        MAKE_STOPWATCH_SCOPE(sct, "SDL_WaitEventTimeoutNS/SDL_EVENT_KEY_DOWN/R");
         shuffle_items_and_schedule_invokes();
     }
     return result;

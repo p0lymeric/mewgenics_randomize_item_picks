@@ -1,24 +1,24 @@
 #pragma once
 
-// Enable time profiling
-// #define ENABLE_TIME_PROFILING
+// Enable stopwatch measurement and lap printing
+// #define ENABLE_STOPWATCHES
 
 #include "utilities/debug_console.hpp"
 
 #include <chrono>
 
-// Time profiling utilities.
+// Stopwatch and performance measurement utilities.
 //
 // polymeric 2026
 
-#ifdef ENABLE_TIME_PROFILING
-#define MAKE_PROFILER_SCOPE(var, label) ScopeTimer var(label)
-#define MAKE_PROFILER_CHECKPOINT(var, label) CheckpointTimer var(label)
-#define PROFILER_CHECKPOINT_CHECK(var, checkpoint_name) var.check(checkpoint_name)
+#ifdef ENABLE_STOPWATCHES
+#define MAKE_STOPWATCH_SCOPE(var, label) ScopeTimer var(label)
+#define MAKE_STOPWATCH_CHECKPOINT(var, label) CheckpointTimer var(label)
+#define STOPWATCH_CHECKPOINT_LAP(var, checkpoint_name) var.lap(checkpoint_name)
 #else
-#define MAKE_PROFILER_SCOPE(var, label)
-#define MAKE_PROFILER_CHECKPOINT(var, label)
-#define PROFILER_CHECKPOINT_CHECK(var, checkpoint_name)
+#define MAKE_STOPWATCH_SCOPE(var, label)
+#define MAKE_STOPWATCH_CHECKPOINT(var, label)
+#define STOPWATCH_CHECKPOINT_LAP(var, checkpoint_name)
 #endif
 
 class ScopeTimer {
@@ -46,7 +46,7 @@ public:
         this->last_ = std::chrono::steady_clock::now();
     }
 
-    void check(std::string checkpoint_name) {
+    void lap(std::string checkpoint_name) {
         std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
         std::chrono::duration duration = std::chrono::duration_cast<std::chrono::nanoseconds>(now - this->last_);
         D::debug("checkpoint {} ({} -> {}): took {}", this->label_, this->last_checkpoint_name_, checkpoint_name, duration);
@@ -60,4 +60,4 @@ private:
     std::chrono::steady_clock::time_point last_;
 };
 
-#undef ENABLE_TIME_PROFILING
+#undef ENABLE_STOPWATCHES

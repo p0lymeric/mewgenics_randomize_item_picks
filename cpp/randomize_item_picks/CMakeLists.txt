@@ -25,8 +25,8 @@ endif()
 
 # Define build targets
 add_library(${HOOK_NAME} SHARED
-    ameboid.cpp
-    ameboid.def
+    amoeboid.cpp
+    amoeboid.def
     randomize_item_picks.cpp
     utilities/mewjector_support.c
 )
