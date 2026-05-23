@@ -38,6 +38,7 @@ std::string get_user_facing_error_message(AmoeboidErrorCode error_code) {
             break;
         case AmoeboidErrorCode::HashMismatch:
             builder += std::format("{} is not compatible with the version of Mewgenics on your computer. Mewgenics version {} is expected.\n", MOD_NAME, EXE_VERSION);
+            break;
         case AmoeboidErrorCode::FailedToResolveSymbol:
             builder += std::format("A function/data symbol failed to resolve.\n");
             break;

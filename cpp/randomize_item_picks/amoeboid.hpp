@@ -23,10 +23,10 @@ inline constexpr char MOD_VERSION[] = "1.0.2";
 // The script under misc/find_rvas.py can help with recovering these addresses after a game update
 
 // Semantic release version of the Mewgenics.exe binary last used to update hardcoded offsets
-inline constexpr char EXE_VERSION[] = "1.0.20941";
+inline constexpr char EXE_VERSION[] = "1.1.21039";
 
 // SHA-256 hash of the Mewgenics.exe binary last used to update hardcoded offsets
-inline constexpr Hash256Bit EXE_SHA256 = c_str_to_hash256bit("c10cb2435874db1e291b949eb226e061512e05f2bc235504a6617f525688b26c");
+inline constexpr Hash256Bit EXE_SHA256 = c_str_to_hash256bit("c3a41e436a93fa58cd386ec46dad5c2a6f21a583d33c3a57a15a2604c726439e");
 
 // Function offsets are encoded as relative VAs
 inline constexpr const auto ADDRESS_glaiel__MewDirector__always_update = DirectSig::make<"48 8B 05 ?? ?? ?? ?? F2 0F 10 05 ?? ?? ?? ?? 48 FF 81 30 05 00 00 F2 0F 5E 80 C8 0D 00 00 F2 0F 58 81 38 05 00 00">(0);
