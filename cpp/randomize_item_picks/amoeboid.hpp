@@ -16,6 +16,7 @@
 
 inline constexpr char MOD_AUTHOR[] = "polymeric";
 inline constexpr char MOD_NAME[] = "Randomize Item Picks";
+inline constexpr char MOD_IDENTIFIER[] = "polymeric.randomize_item_picks";
 inline constexpr char MOD_URL[] = "https://www.nexusmods.com/mewgenics/mods/318\nhttps://github.com/p0lymeric/mewgenics_randomize_item_picks";
 inline constexpr char MOD_VERSION[] = "1.0.3";
 

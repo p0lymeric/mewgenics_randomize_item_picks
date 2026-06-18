@@ -12,6 +12,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <concepts>
+#include <cstring>
+#include <format>
 #include <span>
 #include <stdexcept>
 #include <string_view>
@@ -55,12 +57,13 @@ public:
     size_t last_nonwildcard_idx;
     bool trivial_pattern; // empty or all wildcards
 
+    virtual ~BPatternDescriptor() = default;
     virtual std::span<const uint8_t> pattern() const = 0;
     virtual std::span<const uint8_t> pattern_mask() const = 0;
 
-    uint8_t *find_unique_match_or_none(uint8_t *seq_start, size_t seq_size_bytes) const {
-        uint8_t *match = nullptr;
-        find_callback(seq_start, seq_size_bytes, [&](uint8_t *result) -> bool {
+    const uint8_t *find_unique_match_or_none(const uint8_t *seq_start, size_t seq_size_bytes) const {
+        const uint8_t *match = nullptr;
+        find_callback(seq_start, seq_size_bytes, [&](const uint8_t *result) -> bool {
             if(match == nullptr) {
                 match = result;
                 return true;
@@ -73,8 +76,8 @@ public:
         return match;
     }
 
-    template<std::predicate<uint8_t *> CB>
-    void find_callback(uint8_t *seq_start, size_t seq_size_bytes, CB &&callback) const {
+    template<std::predicate<const uint8_t *> CB>
+    void find_callback(const uint8_t *seq_start, size_t seq_size_bytes, CB &&callback) const {
         // Trivial cases.
         size_t pattern_size_bytes = this->pattern().size_bytes();
         if(pattern_size_bytes > seq_size_bytes) {
@@ -151,7 +154,7 @@ public:
             #endif
 
             while(offset < limit) {
-                uint8_t *addr = seq_start + offset;
+                const uint8_t *addr = seq_start + offset;
                 bool first_byte_matches = (addr[0] & pattern_mask_[this->first_nonwildcard_idx]) == pattern_[this->first_nonwildcard_idx];
                 bool last_byte_matches = (addr[dist_pattern_first_last_nonwildcard] & pattern_mask_[this->last_nonwildcard_idx]) == pattern_[this->last_nonwildcard_idx];
 
@@ -162,7 +165,7 @@ public:
                         &pattern_mask_[this->first_nonwildcard_idx],
                         dist_pattern_first_last_nonwildcard + 1
                     )) {
-                        uint8_t *match_start = addr - this->first_nonwildcard_idx;
+                        const uint8_t *match_start = addr - this->first_nonwildcard_idx;
                         if(!callback(match_start)) {
                             return;
                         }
@@ -200,6 +203,35 @@ public:
         } else {
             stage1_compare.template operator()<false, false>();
         }
+    }
+
+    std::string to_string() const {
+        std::string builder;
+        builder += "(pattern: ";
+        size_t size = this->pattern().size();
+        for(size_t i = 0; i < size; i++) {
+            uint8_t patt = this->pattern()[i];
+            uint8_t mask = this->pattern_mask()[i];
+            if(mask >> 4 == 0xF) {
+                builder.push_back("0123456789ABCDEF"[patt >> 4]);
+            } else if(mask >> 4 == 0x0) {
+                builder.push_back('?');
+            } else {
+                builder.push_back('/');
+            }
+            if((mask & 0xF) == 0xF) {
+                builder.push_back("0123456789ABCDEF"[patt & 0xF]);
+            } else if((mask & 0xF) == 0x0) {
+                builder.push_back('?');
+            } else {
+                builder.push_back('/');
+            }
+            // if(i < size - 1) {
+            //     builder.push_back(' ');
+            // }
+        }
+        builder += std::format(", size {}, 1nwi: {}, -1nwi: {}, trivial: {})", size, this->first_nonwildcard_idx, this->last_nonwildcard_idx, this->trivial_pattern);
+        return builder;
     }
 
 protected:
@@ -279,7 +311,7 @@ private:
         size_t dist_pattern_first_last_nonwildcard,
         const uint8_t *pattern_,
         const uint8_t *pattern_mask_,
-        uint8_t *addr,
+        const uint8_t *addr,
         uint32_t equality_bytewise
     ) const {
         while(equality_bytewise != 0) {
@@ -292,7 +324,7 @@ private:
                 &pattern_mask_[this->first_nonwildcard_idx],
                 dist_pattern_first_last_nonwildcard + 1
             )) {
-                uint8_t *match_start = addr + bitpos - this->first_nonwildcard_idx;
+                const uint8_t *match_start = addr + bitpos - this->first_nonwildcard_idx;
                 if(!callback(match_start)) {
                     return false;
                 }
@@ -308,7 +340,7 @@ private:
     #ifdef USE_AVX2_INTRINSICS_STAGE1
     template<bool S2SSE2, bool S2AVX2, std::predicate<uint8_t *> CB>
     TARGET("avx2") bool stage1_compare_avx2_loop(
-        uint8_t *seq_start,
+        const uint8_t *seq_start,
         CB &&callback,
         size_t *p_offset,
         size_t limit,
@@ -321,7 +353,7 @@ private:
         const __m256i vec_first_byte_mask = _mm256_set1_epi8(pattern_mask_[this->first_nonwildcard_idx]);
         const __m256i vec_last_byte_mask = _mm256_set1_epi8(pattern_mask_[this->last_nonwildcard_idx]);
         while(*p_offset + 32 <= limit) {
-            uint8_t *addr = seq_start + *p_offset;
+            const uint8_t *addr = seq_start + *p_offset;
             const __m256i vec_first_block = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(addr));
             const __m256i vec_last_block = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(addr + dist_pattern_first_last_nonwildcard));
 
@@ -350,7 +382,7 @@ private:
     #ifdef USE_SSE2_INTRINSICS_STAGE1
     template<bool S2SSE2, bool S2AVX2, std::predicate<uint8_t *> CB>
     TARGET("sse2") bool stage1_compare_sse2_loop(
-        uint8_t *seq_start,
+        const uint8_t *seq_start,
         CB &&callback,
         size_t *p_offset,
         size_t limit,
@@ -363,7 +395,7 @@ private:
         const __m128i vec_first_byte_mask = _mm_set1_epi8(pattern_mask_[this->first_nonwildcard_idx]);
         const __m128i vec_last_byte_mask = _mm_set1_epi8(pattern_mask_[this->last_nonwildcard_idx]);
         while(*p_offset + 16 <= limit) {
-            uint8_t *addr = seq_start + *p_offset;
+            const uint8_t *addr = seq_start + *p_offset;
             const __m128i vec_first_block = _mm_loadu_si128(reinterpret_cast<const __m128i *>(addr));
             const __m128i vec_last_block = _mm_loadu_si128(reinterpret_cast<const __m128i *>(addr + dist_pattern_first_last_nonwildcard));
 
@@ -552,7 +584,8 @@ public:
 
 class ISigDescriptor {
 public:
-    virtual uint8_t *find_unique_match_or_none(uint8_t *seq_start, size_t seq_size_bytes) const = 0;
+    virtual ~ISigDescriptor() = default;
+    virtual const uint8_t *find_unique_match_or_none(const uint8_t *seq_start, size_t seq_size_bytes) const = 0;
 };
 
 template<typename PD>
@@ -564,8 +597,8 @@ struct BDirectSig : ISigDescriptor {
         pattern(std::move(pattern)), offset(offset)
     {}
 
-    uint8_t *find_unique_match_or_none(uint8_t *seq_start, size_t seq_size_bytes) const override {
-        uint8_t *addr = this->pattern.find_unique_match_or_none(seq_start, seq_size_bytes);
+    const uint8_t *find_unique_match_or_none(const uint8_t *seq_start, size_t seq_size_bytes) const override {
+        const uint8_t *addr = this->pattern.find_unique_match_or_none(seq_start, seq_size_bytes);
         if(addr == nullptr) {
             return nullptr;
         } else {
@@ -602,8 +635,8 @@ struct BIndirectSig : ISigDescriptor {
         pattern(std::move(pattern)), offset(offset), length(length), signed_(signed_), rip_relative(rip_relative)
     {}
 
-    uint8_t *find_unique_match_or_none(uint8_t *seq_start, size_t seq_size_bytes) const override {
-        uint8_t *addr = this->pattern.find_unique_match_or_none(seq_start, seq_size_bytes);
+    const uint8_t *find_unique_match_or_none(const uint8_t *seq_start, size_t seq_size_bytes) const override {
+        const uint8_t *addr = this->pattern.find_unique_match_or_none(seq_start, seq_size_bytes);
         if(addr == nullptr) {
             return nullptr;
         } else {
@@ -611,43 +644,27 @@ struct BIndirectSig : ISigDescriptor {
             if(this->signed_) {
                 // Read with sign extension
                 switch(this->length) {
-                    case 1:
-                        operand_ext = *reinterpret_cast<int8_t *>(addr + this->offset);
-                        break;
-                    case 2:
-                        operand_ext = *reinterpret_cast<int16_t *>(addr + this->offset);
-                        break;
-                    case 4:
-                        operand_ext = *reinterpret_cast<int32_t *>(addr + this->offset);
-                        break;
-                    case 8:
-                        operand_ext = *reinterpret_cast<int64_t *>(addr + this->offset);
-                        break;
+                    case 1: { int8_t tmp; std::memcpy(&tmp, addr + this->offset, 1); operand_ext = tmp; break; }
+                    case 2: { int16_t tmp; std::memcpy(&tmp, addr + this->offset, 2); operand_ext = tmp; break; }
+                    case 4: { int32_t tmp; std::memcpy(&tmp, addr + this->offset, 4); operand_ext = tmp; break; }
+                    case 8: { std::memcpy(&operand_ext, addr + this->offset, 8); break; }
                     default:
                         return nullptr;
                 }
             } else {
                 // Read as unsigned
                 switch(this->length) {
-                    case 1:
-                        operand_ext = *reinterpret_cast<uint8_t *>(addr + this->offset);
-                        break;
-                    case 2:
-                        operand_ext = *reinterpret_cast<uint16_t *>(addr + this->offset);
-                        break;
-                    case 4:
-                        operand_ext = *reinterpret_cast<uint32_t *>(addr + this->offset);
-                        break;
-                    case 8:
-                        operand_ext = *reinterpret_cast<uint64_t *>(addr + this->offset);
-                        break;
+                    case 1: { uint8_t tmp; std::memcpy(&tmp, addr + this->offset, 1); operand_ext = tmp; break; }
+                    case 2: { uint16_t tmp; std::memcpy(&tmp, addr + this->offset, 2); operand_ext = tmp; break; }
+                    case 4: { uint32_t tmp; std::memcpy(&tmp, addr + this->offset, 4); operand_ext = tmp; break; }
+                    case 8: { std::memcpy(&operand_ext, addr + this->offset, 8); break; }
                     default:
                         return nullptr;
                 }
             }
 
             if (rip_relative) {
-                uint8_t *rip = addr + this->offset + length;
+                const uint8_t *rip = addr + this->offset + length;
                 return rip + operand_ext;
             } else {
                 return reinterpret_cast<uint8_t *>(operand_ext);

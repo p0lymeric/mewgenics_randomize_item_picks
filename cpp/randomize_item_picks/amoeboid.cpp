@@ -6,8 +6,7 @@
 #include "utilities/strings.hpp"
 #include "utilities/portal.hpp"
 #include "utilities/stopwatch.hpp"
-
-#include <filesystem>
+#include "utilities/pe_view.hpp"
 
 #include <windows.h>
 
@@ -62,12 +61,19 @@ std::string get_user_facing_error_message(AmoeboidErrorCode error_code) {
 }
 
 AmoeboidErrorCode on_attach() {
+    // Fetch the Mewjector API if it is present
+    MJ_SUPPORT_InitAPI(MOD_IDENTIFIER);
+
     // Actual virtual address where mapped executable begins
     HMODULE host_exec_module = GetModuleHandle(NULL);
     uintptr_t host_exec_base_va = reinterpret_cast<uintptr_t>(host_exec_module);
     size_t host_exec_image_size = get_pe_image_mapped_size(host_exec_module);
     G.host_exec_base_va = host_exec_base_va;
     G.host_exec_image_size = host_exec_image_size;
+
+    // Map the raw executable for hashing and signature scanning
+    PeView host_exec_pe_view;
+    host_exec_pe_view.open(get_module_file_path(NULL));
 
     // Create a Win32 console window with which to print log messages. ENABLE_CONSOLE_LOGGING disables this for public release.
     ALLOC_CONSOLE();
@@ -76,9 +82,8 @@ AmoeboidErrorCode on_attach() {
     // If the act of calculating the hash fails, continue optimistically
     {
         MAKE_STOPWATCH_SCOPE(sct, "sha256 calculation");
-        std::filesystem::path exe_path = get_module_file_path(NULL);
-        G.exe_actual_sha256 = sha256_file(exe_path);
-        if(G.exe_actual_sha256.has_value()) {
+        if(host_exec_pe_view.is_opened()) {
+            G.exe_actual_sha256 = sha256_span(host_exec_pe_view.get_file_span());
             G.exe_hash_mismatch_detected = (G.exe_actual_sha256.value() != EXE_SHA256);
         }
     }
@@ -100,11 +105,11 @@ AmoeboidErrorCode on_attach() {
     {
         MAKE_STOPWATCH_SCOPE(sct, "symbol resolution");
         // Resolve portals (trampolines to functions and data)
-        if(!SPortalRegistry::resolve_portals(host_exec_base_va, host_exec_image_size)) {
+        if(!SPortalRegistry::resolve_portals(host_exec_base_va, host_exec_pe_view)) {
             return AmoeboidErrorCode::FailedToResolveSymbol;
         }
         // Resolve function hook targets
-        if(!SFunctionHookRegistry::resolve_hooks(host_exec_base_va, host_exec_image_size, 0)) {
+        if(!SFunctionHookRegistry::resolve_hooks(host_exec_base_va, host_exec_pe_view, 0)) {
             return AmoeboidErrorCode::FailedToResolveSymbol;
         }
     }

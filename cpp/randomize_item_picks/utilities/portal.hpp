@@ -1,9 +1,11 @@
 #pragma once
 
 #include "utilities/memory.hpp" // IWYU pragma: keep
+#include "utilities/pe_view.hpp"
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 // Now you're thinking with portals!
@@ -52,6 +54,7 @@
 class IPortalDescriptor {
 public:
     virtual bool resolve(uintptr_t offset, size_t size) = 0;
+    virtual bool resolve(uintptr_t offset, PeView &pe_view) = 0;
 };
 
 class SPortalRegistry {
@@ -67,6 +70,16 @@ public:
         bool success = true;
         for(auto portal : SPortalRegistry::get_registry()) {
             if(!portal->resolve(host_exec_base_va, host_exec_image_size)) {
+                success = false;
+            }
+        }
+        return success;
+    }
+
+    static bool resolve_portals(uintptr_t host_exec_base_va, PeView &pe_view) {
+        bool success = true;
+        for(auto portal : SPortalRegistry::get_registry()) {
+            if(!portal->resolve(host_exec_base_va, pe_view)) {
                 success = false;
             }
         }
@@ -96,6 +109,12 @@ public:
         this->target = reinterpret_cast<T>(this->target_canonical + offset);
         return true;
     }
+
+    bool resolve(uintptr_t offset, PeView &pe_view) override {
+        (void)pe_view;
+        this->target = reinterpret_cast<T>(this->target_canonical + offset);
+        return true;
+    }
 };
 
 template<typename T, bool RegisterMe, typename SigClass>
@@ -116,11 +135,31 @@ public:
     }
 
     bool resolve(uintptr_t offset, size_t size) override {
-        uint8_t *result = sig.find_unique_match_or_none(reinterpret_cast<uint8_t *>(offset), size);
+        uint8_t *result = const_cast<uint8_t *>(sig.find_unique_match_or_none(reinterpret_cast<const uint8_t *>(offset), size));
         if(result == nullptr) {
             return false;
         }
         target = reinterpret_cast<T>(result);
         return true;
+    }
+
+    bool resolve(uintptr_t offset, PeView &pe_view) override {
+        if(pe_view.is_opened()) {
+            std::span<const uint8_t> span = pe_view.get_file_span();
+            const uint8_t *span_data = span.data();
+            size_t span_size = span.size();
+
+            const uint8_t *result = sig.find_unique_match_or_none(span_data, span_size);
+            if(result == nullptr) {
+                return false;
+            }
+
+            std::optional<uintptr_t> rva = pe_view.file_offset_to_rva(result - span_data);
+            if(rva.has_value()) {
+                target = reinterpret_cast<T>(rva.value() + offset);
+                return true;
+            }
+        }
+        return false;
     }
 };

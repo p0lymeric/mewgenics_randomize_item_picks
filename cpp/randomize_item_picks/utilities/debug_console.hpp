@@ -6,6 +6,7 @@
 #define ENABLE_MEWJECTOR_LOGGING
 
 #ifdef ENABLE_CONSOLE_LOGGING
+#include "amoeboid.hpp"
 #include "utilities/strings.hpp"
 #endif
 #ifdef ENABLE_MEWJECTOR_LOGGING
@@ -60,12 +61,12 @@ public:
         #ifdef ENABLE_CONSOLE_LOGGING
         auto now = std::chrono::system_clock::now();
         std::wstring wide;
-        wide = convert_utf8_string_to_utf16_wstring(std::format("polymeric.randomize_item_picks - {:%F %T} - {}\n", now, multibyte));
+        wide = convert_utf8_string_to_utf16_wstring(std::format("{} - {:%F %T} - {}\n", MOD_IDENTIFIER, now, multibyte));
         WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), wide.data(), static_cast<DWORD>(wide.length()), NULL, NULL);
         #endif
         #ifdef ENABLE_MEWJECTOR_LOGGING
         if(const MewjectorAPI *mj = MJ_SUPPORT_GetAPI(); mj != NULL) {
-            mj->Log("polymeric.randomize_item_picks", "%s", multibyte.c_str());
+            mj->Log(MJ_SUPPORT_GetOwner(), "%s", multibyte.c_str());
         }
         #endif
     }
