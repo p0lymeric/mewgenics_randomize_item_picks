@@ -6,6 +6,7 @@
 #define USE_SSE2_INTRINSICS_STAGE2
 #define USE_AVX2_INTRINSICS_STAGE2
 
+// #include "utilities/debug_console.hpp"
 #include "utilities/constexpr.hpp"
 
 #include <array>
@@ -14,6 +15,7 @@
 #include <concepts>
 #include <cstring>
 #include <format>
+#include <functional>
 #include <span>
 #include <stdexcept>
 #include <string_view>
@@ -584,8 +586,9 @@ public:
 
 class ISigDescriptor {
 public:
+    using SeqToVaCb = std::function<const uint8_t *(const uint8_t *addr)>;
     virtual ~ISigDescriptor() = default;
-    virtual const uint8_t *find_unique_match_or_none(const uint8_t *seq_start, size_t seq_size_bytes) const = 0;
+    virtual const uint8_t *find_unique_match_or_none(const uint8_t *seq_start, size_t seq_size_bytes, const SeqToVaCb &seq_to_va) const = 0;
 };
 
 template<typename PD>
@@ -597,12 +600,12 @@ struct BDirectSig : ISigDescriptor {
         pattern(std::move(pattern)), offset(offset)
     {}
 
-    const uint8_t *find_unique_match_or_none(const uint8_t *seq_start, size_t seq_size_bytes) const override {
-        const uint8_t *addr = this->pattern.find_unique_match_or_none(seq_start, seq_size_bytes);
-        if(addr == nullptr) {
+    const uint8_t *find_unique_match_or_none(const uint8_t *seq_start, size_t seq_size_bytes, const SeqToVaCb &seq_to_va) const override {
+        const uint8_t *addr_va = seq_to_va(this->pattern.find_unique_match_or_none(seq_start, seq_size_bytes));
+        if(addr_va == nullptr) {
             return nullptr;
         } else {
-            return addr + offset;
+            return addr_va + offset;
         }
     }
 };
@@ -635,7 +638,7 @@ struct BIndirectSig : ISigDescriptor {
         pattern(std::move(pattern)), offset(offset), length(length), signed_(signed_), rip_relative(rip_relative)
     {}
 
-    const uint8_t *find_unique_match_or_none(const uint8_t *seq_start, size_t seq_size_bytes) const override {
+    const uint8_t *find_unique_match_or_none(const uint8_t *seq_start, size_t seq_size_bytes, const SeqToVaCb &seq_to_va) const override {
         const uint8_t *addr = this->pattern.find_unique_match_or_none(seq_start, seq_size_bytes);
         if(addr == nullptr) {
             return nullptr;
@@ -664,7 +667,11 @@ struct BIndirectSig : ISigDescriptor {
             }
 
             if (rip_relative) {
-                const uint8_t *rip = addr + this->offset + length;
+                const uint8_t *addr_va = seq_to_va(addr);
+                if(addr_va == nullptr) {
+                    return nullptr;
+                }
+                const uint8_t *rip = addr_va + this->offset + length;
                 return rip + operand_ext;
             } else {
                 return reinterpret_cast<uint8_t *>(operand_ext);
