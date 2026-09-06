@@ -5,7 +5,9 @@ set(LIBTOMCRYPT_DIR third_party)
 
 # List build targets
 add_library(${PROJECT_NAME} STATIC
+    ${LIBTOMCRYPT_DIR}/sha256_desc.c
     ${LIBTOMCRYPT_DIR}/sha256.c
+    ${LIBTOMCRYPT_DIR}/sha256_x86.c
 )
 
 # List include directories

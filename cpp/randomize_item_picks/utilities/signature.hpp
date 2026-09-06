@@ -615,12 +615,12 @@ public:
     DirectSig() = delete;
 
     template<FixedString FS>
-    static consteval auto make(size_t offset) {
+    static consteval auto make(ptrdiff_t offset) {
         auto pd = PatternDescriptor::make<FS>();
         return BDirectSig(pd, offset);
     }
 
-    static BDirectSig<VectorPatternDescriptor> make(const std::string_view sv, size_t offset) {
+    static BDirectSig<VectorPatternDescriptor> make(const std::string_view sv, ptrdiff_t offset) {
         VectorPatternDescriptor pd = PatternDescriptor::make(sv);
         return BDirectSig(pd, offset);
     }

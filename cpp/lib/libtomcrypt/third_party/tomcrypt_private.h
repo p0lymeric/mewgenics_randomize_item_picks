@@ -54,4 +54,10 @@ int func_name (hash_state * md, const unsigned char *in, unsigned long inlen)   
     return CRYPT_OK;                                                                        \
 }
 
+#define LTC_SHA_TARGET LTC_ATTRIBUTE((__target__("sse2,ssse3,sse4.1,sha")))
+
+#ifdef LTC_SHA256
+int sha256_test_desc(const struct ltc_hash_descriptor *desc, const char *name);
+#endif
+
 #endif /* TOMCRYPT_PRIVATE_H_ */

@@ -70,4 +70,18 @@ int sha256_process(hash_state * md, const unsigned char *in, unsigned long inlen
 int sha256_done(hash_state * md, unsigned char *out);
 int sha256_test(void);
 extern const struct ltc_hash_descriptor sha256_desc;
-#endif
+
+#define sha256_c_init sha256_init
+int sha256_c_process(hash_state * md, const unsigned char *in, unsigned long inlen);
+int sha256_c_done(hash_state * md, unsigned char *out);
+int sha256_c_test(void);
+extern const struct ltc_hash_descriptor sha256_portable_desc;
+
+#ifdef LTC_SHA256_X86
+#define sha256_x86_init sha256_init
+int sha256_x86_process(hash_state * md, const unsigned char *in, unsigned long inlen);
+int sha256_x86_done(hash_state * md, unsigned char *out);
+int sha256_x86_test(void);
+extern const struct ltc_hash_descriptor sha256_x86_desc;
+#endif /* LTC_SHA256_X86 */
+#endif /* LTC_SHA256 */
